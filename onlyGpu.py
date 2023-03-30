@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import time
 import random
 import sys
@@ -15,7 +13,9 @@ from rdkit.ML.Cluster import Butina
 from rdkit.Chem import Draw
 from rdkit.Chem import rdFingerprintGenerator
 from rdkit.Chem.Draw import SimilarityMaps
+import matplotlib.pyplot as plt 
 
+inicioGPU = time.time()
 # show full results
 np.set_printoptions(threshold=sys.maxsize)
 
@@ -51,85 +51,6 @@ fgrps = [rdkit_gen.GetFingerprint(mol) for mol in molecules]
 nfgrps = len(fgrps)
 print("Number of fingerprints:", nfgrps)
 
-#fp_arr = np.zeros((1,))
-
-
-
-# Defining a function to calculate similarities among the molecules
-def pairwise_similarity(fingerprints_list):
-    
-    global similarities
-
-    similarities = np.zeros((nfgrps, nfgrps))
-
-    for i in range(1, nfgrps):
-            similarity = DataStructs.BulkTanimotoSimilarity(fgrps[i], fgrps[:i])
-            similarities[i, :i] = similarity
-            similarities[:i, i] = similarity
-            
-    return similarities
-
-
-# Calculating similarities of molecules
-inicio = time.time()
-
-pairwise_similarity(fgrps)
-tri_lower_diag = np.tril(similarities, k=0)
-
-
-fin = time.time()
-
-print("El tiempo sin paralelizacion fue de:", fin-inicio)
-# Visulaizing the similarities
-
-# definging labels to show on heatmap
-labels = ['lig1','lig2','lig3','lig4','lig5','lig6','lig7', 'lig8', 'lig9', 'lig10', 'lig11', 'lig12', 'lig13', 'lig14', 'lig15']
-
-
-def normal_heatmap (sim):
-
-    # writing similalrities to a file
-    f = open("similarities.txt", "w")
-    print (similarities, file=f)
-
-    sns.set(font_scale=0.8)
-
-    # generating the plot
-    
-    plot = sns.heatmap(sim[:15,:15], annot = True, annot_kws={"fontsize":5}, center=0,
-            square=True, xticklabels=labels, yticklabels=labels, linewidths=.7, cbar_kws={"shrink": .5})
-
-    plt.title('Heatmap of Tanimoto Similarities', fontsize = 20) # title with fontsize 20
-
-    plt.show()
-
-    # saving the plot
-
-    fig = plot.get_figure()
-    fig.savefig("tanimoto_heatmap.png") 
-
-
-def lower_tri_heatmap (sim):
-    f = open("similarities_lower_tri.txt", "w")
-
-    print (tri_lower_diag, file=f)
-
-    cmap = sns.diverging_palette(220, 10, as_cmap=True)
-
-    lower_tri_plot = sns.heatmap(tri_lower_diag[:15,:15], annot = False, cmap=cmap,center=0,
-            square=True, xticklabels=labels, yticklabels=labels, linewidths=.7, cbar_kws={"shrink": .5})
-
-    plt.title('Heatmap of Tanimoto Similarities', fontsize = 20)
-
-    plt.show()
-
-    fig = lower_tri_plot.get_figure()
-    fig.savefig("tanimoto_heatmap_lw_tri.png") 
-
-
-normal_heatmap(similarities)
-
-lower_tri_heatmap(similarities)
 
 #GPU high computing
 import pyopencl as cl
@@ -176,26 +97,6 @@ for i in range(1, nfgrps):
 fgrpsGpu = fgrpsGpu.astype("int32")
 
 
-
-'''
-fp_arr5 = np.zeros(2048,dtype=np.int32)
-fp_arr4 = np.zeros(2048,dtype=np.int32)
-DataStructs.ConvertToNumpyArray(fgrps[0], fp_arr5)
-DataStructs.ConvertToNumpyArray(fgrps[1], fp_arr4)
-
-count = 0
-
-for i in range(2048):
-    if (fp_arr5[i] == 1 and fp_arr4[i] == 1):
-        count += 1
-
-print("nc = ", count)
-print("na = ", nm[0])
-print("nb = ", nm[1])
-print("tanimoto = ", count/(nm[0]+nm[1]-count))
-'''
-
-inicioGPU = time.time()
 
 #iteracion para cada particula
 tanimotoResult = np.array(np.zeros(cant+1, dtype=np.float32))
