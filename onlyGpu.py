@@ -15,17 +15,17 @@ from rdkit.Chem import rdFingerprintGenerator
 from rdkit.Chem.Draw import SimilarityMaps
 import matplotlib.pyplot as plt 
 
-inicioGPU = time.time()
+
 # show full results
 np.set_printoptions(threshold=sys.maxsize)
 
 
 # Reading the input CSV file.
 
-ligands_df = pd.read_csv("smiles.csv" , index_col=0 )
+ligands_df = pd.read_csv("smiles2.0.csv" , index_col=0 )
 #print(ligands_df.head())
 
-
+inicioGPU = time.time()
 
 # Creating molecules and storing in an array
 molecules = []
@@ -33,12 +33,13 @@ molecules = []
 """Let's fetch the smiles from the input file and store in molecules array
         We have used '_' because we don't want any other column.
         If you want to fetch index and any other column, then replace '_' with 
+        
             index and write column names after a ','.
 """
 
 for _, smiles in ligands_df[[ "SMILES"]].itertuples():
     molecules.append((Chem.MolFromSmiles(smiles)))
-molecules[:15]
+molecules[:10000]
 
 
 # Creating fingerprints for all molecules
@@ -51,7 +52,6 @@ fgrps = [rdkit_gen.GetFingerprint(mol) for mol in molecules]
 nfgrps = len(fgrps)
 print("Number of fingerprints:", nfgrps)
 
-
 #GPU high computing
 import pyopencl as cl
 #import os
@@ -59,8 +59,11 @@ import pyopencl as cl
 
 #combinaciones posibles
 
-cant = int(((0+nfgrps-1)*nfgrps)/2)
+#progresion aritmetica
+cant = int(((nfgrps-1)*nfgrps)/2)
 
+
+'''
 combinations = np.zeros(cant*2,dtype=np.int32)
 
 juan = nfgrps-1
@@ -82,11 +85,21 @@ for i in range(cant):
     combinations[i*2+1] = int(start + 1)
     cont += 1
     start += 1
-    
+'''
+
+# Crear los arreglos para guardar las combinaciones
+combinations = np.transpose(np.triu_indices(nfgrps, k=1))
+arreglo1 = combinations[:, 0].astype("int32")
+arreglo2 = combinations[:, 1].astype("int32")
+
+
+'''
 #transformacion de los fingerprints de RDKIT a data que se puede mandar a la gpu
 fp_arr = np.zeros(2048, dtype=np.int32)
 DataStructs.ConvertToNumpyArray(fgrps[0], fp_arr)
 fgrpsGpu=np.array(fp_arr)
+
+
 
 for i in range(1, nfgrps):
     fp_arr = np.zeros(2048)
@@ -95,6 +108,18 @@ for i in range(1, nfgrps):
     fgrpsGpu = np.append(fgrpsGpu, fp_arr)
 
 fgrpsGpu = fgrpsGpu.astype("int32")
+'''
+
+
+
+
+fgrpsGpu = np.zeros((len(fgrps), fgrps[0].GetNumBits()), dtype=np.int64)
+for i, fp in enumerate(fgrps):
+    fgrpsGpu[i,:] = np.fromstring(fp.ToBitString(), dtype=np.uint8) - ord('0')
+
+
+
+#print(fgrpsGpu)
 
 
 
@@ -107,22 +132,23 @@ queue = cl.CommandQueue(ctx, properties=cl.command_queue_properties.PROFILING_EN
 mf = cl.mem_flags
 
 tanimotoArray = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=fgrpsGpu)
-combinationsArray = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=combinations)
+#combinationsArray = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=combinations)
+combinationsArray1 = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=arreglo1)
+combinationsArray2 = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=arreglo2)
 tanimotoResultArray = cl.Buffer(ctx, mf.WRITE_ONLY | mf.COPY_HOST_PTR, hostbuf=tanimotoResult)
 
-f = open('tanimotoSimilarity.cl', 'r', encoding='utf-8')
+f = open('tanimotoSimilarity2.cl', 'r', encoding='utf-8')
 kernels = ''.join(f.readlines())
 f.close()
 
 prg = cl.Program(ctx, kernels).build()
 
 
-knl = prg.tanimoto_similarity(queue, (cant+1,), None, tanimotoArray, combinationsArray, tanimotoResultArray)
-knl.wait()
-
-finGPU = time.time()
+knl = prg.tanimoto_similarity(queue, (cant+1,), None, tanimotoArray, combinationsArray1, combinationsArray2, tanimotoResultArray)
 
 cl.enqueue_copy(queue, tanimotoResult, tanimotoResultArray).wait()
+
+finGPU = time.time()
 
 #print(tanimotoResult)
 print("El tiempo con paralelizacion fue de:", finGPU-inicioGPU)

@@ -1,6 +1,7 @@
 
 __kernel void tanimoto_similarity(__global int *tanimotoArray,
                                   __global int *combinationsArray,
+                                  //__global int *combinationsArray2,
                                   __global float *tanimotoResultArray) {
 
   int global_id = get_global_id(0);

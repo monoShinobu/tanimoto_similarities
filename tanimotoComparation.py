@@ -54,11 +54,11 @@ print("Number of fingerprints:", nfgrps)
 
 #fp_arr = np.zeros((1,))
 
-cambiar = 100
+cambiar = 10
 
 tiempoRDKIT = np.zeros(cambiar)
 tiempoGPU = np.zeros(cambiar)
-cantFgrps = 100
+cantFgrps = 10000
 
 fgrpsAux = fgrps[0:100]
 
@@ -79,6 +79,8 @@ def pairwise_similarity(fingerprints_list):
 
 
 for i in range(cambiar):
+    
+    
     print(i)
     # Calculating similarities of molecules
     inicio = time.time()
@@ -101,6 +103,7 @@ for i in range(cambiar):
     
     cant = int(((0+len(fgrpsAux)-1)*len(fgrpsAux))/2)
     
+    
     combinations = np.zeros(cant*2,dtype=np.int32)
     
     juan = len(fgrpsAux)-1
@@ -122,7 +125,30 @@ for i in range(cambiar):
         combinations[h*2+1] = int(start + 1)
         cont += 1
         start += 1
+    '''
+    
+    combinations1 = np.zeros(cant,dtype=np.int32)
+    combinations2 = np.zeros(cant,dtype=np.int32)
+    inicio1 = 0
+    inicio2 = 1
+    inicio3 = 1
+    aux = inicio3
+    auxini1 = inicio1
+    auxini2 = inicio2
+    
+    
+    for h in range(cant):
+        combinations1[h] = inicio1
+        combinations2[h] = inicio2
+        if aux == cantFgrps-1:
+            inicio3 += 1
+            aux = inicio3
+        inicio1 += 1
+        inicio2 += 1
         
+    print(combinations1)
+    print(combinations2)
+    '''
     #transformacion de los fingerprints de RDKIT a data que se puede mandar a la gpu
     fp_arr = np.zeros(2048, dtype=np.int32)
     DataStructs.ConvertToNumpyArray(fgrpsAux[0], fp_arr)
@@ -153,6 +179,7 @@ for i in range(cambiar):
     
     tanimotoArray = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=fgrpsGpu)
     combinationsArray = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=combinations)
+    #combinationsArray2 = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=combinations2)
     #NM = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=nm)
     tanimotoResultArray = cl.Buffer(ctx, mf.WRITE_ONLY | mf.COPY_HOST_PTR, hostbuf=tanimotoResult)
     
@@ -172,6 +199,8 @@ for i in range(cambiar):
     
     cl.enqueue_copy(queue, tanimotoResult, tanimotoResultArray).wait()
     
+    
+    
     cantFgrps = cantFgrps + 100
     
     fgrpsAux = fgrps[0:cantFgrps]
@@ -182,7 +211,7 @@ plt.plot(tiempoGPU, label="Tiempos GPU")
 
 # Agregar título y etiquetas de los ejes
 plt.title("GPU Vs Rdkit")
-plt.xlabel("ejecucion")
+plt.xlabel("Ejecución")
 plt.ylabel("Tiempo")
 
 # Agregar leyenda
