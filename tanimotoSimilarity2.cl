@@ -1,7 +1,7 @@
 
-__kernel void tanimoto_similarity(__global int *tanimotoArray,
-                                  __global int *combinationsArray1,
-                                  __global int *combinationsArray2,
+__kernel void tanimoto_similarity(__global uchar *tanimotoArray,
+                                  __global ushort *combinationsArray1,
+                                  __global ushort *combinationsArray2,
                                   __global float *tanimotoResultArray) {
 
   int global_id = get_global_id(0);
@@ -15,6 +15,7 @@ __kernel void tanimoto_similarity(__global int *tanimotoArray,
   for (i = 0; i < 2048; i++) {
     Na = Na + tanimotoArray[mol1 + i];
     Nb = Nb + tanimotoArray[mol2 + i];
+    
     if (tanimotoArray[mol1 + i] == 1 && tanimotoArray[mol2 + i] == 1) {
       Nc = Nc + 1;
     }

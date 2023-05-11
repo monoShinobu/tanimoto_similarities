@@ -15,7 +15,7 @@ from rdkit.Chem import rdFingerprintGenerator
 from rdkit.Chem.Draw import SimilarityMaps
 import matplotlib.pyplot as plt
 
-inicio = time.time()
+
 
 # show full results
 np.set_printoptions(threshold=sys.maxsize)
@@ -45,11 +45,15 @@ rdkit_gen = rdFingerprintGenerator.GetRDKitFPGenerator(maxPath=7)
 fgrps = [rdkit_gen.GetFingerprint(mol) for mol in molecules]
 
 
+
+
 # Calculating number of fingerprints
 nfgrps = len(fgrps)
 print("Number of fingerprints:", nfgrps)
 
 #fp_arr = np.zeros((1,))
+
+inicio = time.time()
 
 # Defining a function to calculate similarities among the molecules
 def pairwise_similarity(fingerprints_list):
@@ -69,7 +73,7 @@ def pairwise_similarity(fingerprints_list):
 # Calculating similarities of molecules
 
 pairwise_similarity(fgrps)
-tri_lower_diag = np.tril(similarities, k=0)
+#tri_lower_diag = np.tril(similarities, k=0)
 
 
 fin = time.time()

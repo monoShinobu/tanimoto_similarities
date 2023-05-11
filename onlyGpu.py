@@ -25,7 +25,7 @@ np.set_printoptions(threshold=sys.maxsize)
 ligands_df = pd.read_csv("smiles2.0.csv" , index_col=0 )
 #print(ligands_df.head())
 
-inicioGPU = time.time()
+
 
 # Creating molecules and storing in an array
 molecules = []
@@ -39,7 +39,7 @@ molecules = []
 
 for _, smiles in ligands_df[[ "SMILES"]].itertuples():
     molecules.append((Chem.MolFromSmiles(smiles)))
-molecules[:10000]
+molecules[:16]
 
 
 # Creating fingerprints for all molecules
@@ -59,68 +59,44 @@ import pyopencl as cl
 
 #combinaciones posibles
 
+inicioGPU = time.time()
 #progresion aritmetica
 cant = int(((nfgrps-1)*nfgrps)/2)
 
 
 '''
-combinations = np.zeros(cant*2,dtype=np.int32)
-
-juan = nfgrps-1
-pedro = 0
-cont = 0
-start = 0
-start2 = 1
-
-for i in range(cant):
-    if cont/juan >= 1:
-        pedro += 1
-        juan -= 1
-        cont = 0
-        start = start2
-        start2 += 1
-        if juan == 0:
-            juan = 1
-    combinations[i*2] = int(pedro)
-    combinations[i*2+1] = int(start + 1)
-    cont += 1
-    start += 1
-'''
-
 # Crear los arreglos para guardar las combinaciones
 combinations = np.transpose(np.triu_indices(nfgrps, k=1))
 arreglo1 = combinations[:, 0].astype("int32")
 arreglo2 = combinations[:, 1].astype("int32")
+'''
+
+# Combinaciones
+combinations = np.transpose(np.triu_indices(nfgrps, k=1))
+arreglo1 = combinations[:, 0].astype("uint16")
+arreglo2 = combinations[:, 1].astype("uint16")
 
 
 '''
-#transformacion de los fingerprints de RDKIT a data que se puede mandar a la gpu
-fp_arr = np.zeros(2048, dtype=np.int32)
-DataStructs.ConvertToNumpyArray(fgrps[0], fp_arr)
-fgrpsGpu=np.array(fp_arr)
+start = 1
+salto = 2
+largo = nfgrps - 1
+arreglo1 = []
+for i in range(nfgrps):
+  for j in range(largo):
+    arreglo1.append(start)
+    start += 1
+  start += salto
+  salto += 1
+  largo -= 1
 
-
-
-for i in range(1, nfgrps):
-    fp_arr = np.zeros(2048)
-    DataStructs.ConvertToNumpyArray(fgrps[i], fp_arr)
-    
-    fgrpsGpu = np.append(fgrpsGpu, fp_arr)
-
-fgrpsGpu = fgrpsGpu.astype("int32")
+arreglo1 = np.array(arreglo1).astype("int32")
 '''
 
 
-
-
-fgrpsGpu = np.zeros((len(fgrps), fgrps[0].GetNumBits()), dtype=np.int64)
-for i, fp in enumerate(fgrps):
-    fgrpsGpu[i,:] = np.fromstring(fp.ToBitString(), dtype=np.uint8) - ord('0')
-
-
-
-#print(fgrpsGpu)
-
+fgrpsGpu = np.zeros((len(fgrps), fgrps[0].GetNumBits()), dtype=np.uint8)
+for l, fp in enumerate(fgrps):
+    fgrpsGpu[l,:] = np.fromstring(fp.ToBitString(), dtype=np.uint8) - ord('0')
 
 
 #iteracion para cada particula
@@ -136,6 +112,7 @@ tanimotoArray = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=fgrpsGpu
 combinationsArray1 = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=arreglo1)
 combinationsArray2 = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=arreglo2)
 tanimotoResultArray = cl.Buffer(ctx, mf.WRITE_ONLY | mf.COPY_HOST_PTR, hostbuf=tanimotoResult)
+#nfgrpsGPU = np.int32(nfgrps)
 
 f = open('tanimotoSimilarity2.cl', 'r', encoding='utf-8')
 kernels = ''.join(f.readlines())
@@ -144,7 +121,8 @@ f.close()
 prg = cl.Program(ctx, kernels).build()
 
 
-knl = prg.tanimoto_similarity(queue, (cant+1,), None, tanimotoArray, combinationsArray1, combinationsArray2, tanimotoResultArray)
+knl = prg.tanimoto_similarity(queue, (cant,), None, tanimotoArray, combinationsArray1, combinationsArray2, tanimotoResultArray)
+#knl = prg.tanimoto_similarity(queue, (cant,), None, tanimotoArray, combinationsArray1, nfgrpsGPU, tanimotoResultArray)
 
 cl.enqueue_copy(queue, tanimotoResult, tanimotoResultArray).wait()
 

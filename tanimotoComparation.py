@@ -16,6 +16,7 @@ from rdkit.Chem import Draw
 from rdkit.Chem import rdFingerprintGenerator
 from rdkit.Chem.Draw import SimilarityMaps
 import matplotlib.pyplot as plt 
+from multiprocessing import Pool
 
 # show full results
 np.set_printoptions(threshold=sys.maxsize)
@@ -54,7 +55,7 @@ print("Number of fingerprints:", nfgrps)
 
 #fp_arr = np.zeros((1,))
 
-cambiar = 10
+cambiar = 100
 
 tiempoRDKIT = np.zeros(cambiar)
 tiempoGPU = np.zeros(cambiar)
@@ -78,10 +79,16 @@ def pairwise_similarity(fingerprints_list):
     return similarities
 
 
+def pairwise_similarityCPU(args):
+    i, fgrp_i, fgrps = args
+    similarity = DataStructs.BulkTanimotoSimilarity(fgrp_i, fgrps[:i])
+    return (i, similarity)
+
 for i in range(cambiar):
+    #print(i)
     
     
-    print(i)
+    
     # Calculating similarities of molecules
     inicio = time.time()
     
@@ -94,111 +101,101 @@ for i in range(cambiar):
     
     
     
+    
+    
+    
+    
+    '''
+    ################################################################################
+    ####################       Paralelizacion en CPU            ####################
+    ################################################################################
+    '''
+    '''
+    inicio = time.time()
+    if __name__ == '__main__':
+        
+        similarities = np.zeros((nfgrps, nfgrps))
+
+        args_list = [(i, fgrps[i], fgrps) for i in range(1, nfgrps)]
+
+        with Pool(processes=4) as pool:
+            results = pool.map(pairwise_similarityCPU, args_list)
+
+        for i, similarity in results:
+            similarities[i, :i] = similarity
+            similarities[:i, i] = similarity
+    fin = time.time()
+    tiempoRDKIT[i] = fin-inicio
+    '''
+    
+
+
+
+
+    '''
+    ################################################################################
+    ####################       Paralelizacion en GPU            ####################
+    ################################################################################
+    '''
+    inicioGPU = time.time()
+    
     #GPU high computing
     import pyopencl as cl
     #import os
     #os.environ['PYOPENCL_COMPILER_OUTPUT'] = '1'
-    
+
     #combinaciones posibles
-    
-    cant = int(((0+len(fgrpsAux)-1)*len(fgrpsAux))/2)
-    
-    
-    combinations = np.zeros(cant*2,dtype=np.int32)
-    
-    juan = len(fgrpsAux)-1
-    pedro = 0
-    cont = 0
-    start = 0
-    start2 = 1
-    
-    for h in range(cant):
-        if cont/juan >= 1:
-            pedro += 1
-            juan -= 1
-            cont = 0
-            start = start2
-            start2 += 1
-            if juan == 0:
-                juan = 1
-        combinations[h*2] = int(pedro)
-        combinations[h*2+1] = int(start + 1)
-        cont += 1
-        start += 1
-    '''
-    
-    combinations1 = np.zeros(cant,dtype=np.int32)
-    combinations2 = np.zeros(cant,dtype=np.int32)
-    inicio1 = 0
-    inicio2 = 1
-    inicio3 = 1
-    aux = inicio3
-    auxini1 = inicio1
-    auxini2 = inicio2
-    
-    
-    for h in range(cant):
-        combinations1[h] = inicio1
-        combinations2[h] = inicio2
-        if aux == cantFgrps-1:
-            inicio3 += 1
-            aux = inicio3
-        inicio1 += 1
-        inicio2 += 1
-        
-    print(combinations1)
-    print(combinations2)
-    '''
-    #transformacion de los fingerprints de RDKIT a data que se puede mandar a la gpu
-    fp_arr = np.zeros(2048, dtype=np.int32)
-    DataStructs.ConvertToNumpyArray(fgrpsAux[0], fp_arr)
-    fgrpsGpu=np.array(fp_arr)
-    
-    for j in range(1, len(fgrpsAux)):
-        fp_arr = np.zeros(2048)
-        DataStructs.ConvertToNumpyArray(fgrpsAux[j], fp_arr)
-        
-        fgrpsGpu = np.append(fgrpsGpu, fp_arr)
-    
-    fgrpsGpu = fgrpsGpu.astype("int32")
-    
+
+    #progresion aritmetica
+    cant = int(((nfgrps-1)*nfgrps)/2)
 
 
 
+    # Crear los arreglos para guardar las combinaciones
+    combinations = np.transpose(np.triu_indices(nfgrps, k=1))
+    arreglo1 = combinations[:, 0].astype("int32")
+    arreglo2 = combinations[:, 1].astype("int32")
 
 
-    inicioGPU = time.time()
-    
+
+    fgrpsGpu = np.zeros((len(fgrps), fgrps[0].GetNumBits()), dtype=np.int64)
+    for j, fp in enumerate(fgrps):
+        fgrpsGpu[j,:] = np.fromstring(fp.ToBitString(), dtype=np.uint8) - ord('0')
+
+
+
+    #print(fgrpsGpu)
+
+
+
     #iteracion para cada particula
     tanimotoResult = np.array(np.zeros(cant+1, dtype=np.float32))
      
     ctx = cl.create_some_context()
     queue = cl.CommandQueue(ctx, properties=cl.command_queue_properties.PROFILING_ENABLE)
-    
+
     mf = cl.mem_flags
-    
+
     tanimotoArray = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=fgrpsGpu)
-    combinationsArray = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=combinations)
-    #combinationsArray2 = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=combinations2)
-    #NM = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=nm)
+    #combinationsArray = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=combinations)
+    combinationsArray1 = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=arreglo1)
+    combinationsArray2 = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=arreglo2)
     tanimotoResultArray = cl.Buffer(ctx, mf.WRITE_ONLY | mf.COPY_HOST_PTR, hostbuf=tanimotoResult)
-    
-    f = open('tanimotoSimilarity.cl', 'r', encoding='utf-8')
+
+    f = open('tanimotoSimilarity2.cl', 'r', encoding='utf-8')
     kernels = ''.join(f.readlines())
     f.close()
-    
+
     prg = cl.Program(ctx, kernels).build()
-    
-    
-    knl = prg.tanimoto_similarity(queue, (cant+1,), None, tanimotoArray, combinationsArray, tanimotoResultArray)
-    knl.wait()
+
+
+    knl = prg.tanimoto_similarity(queue, (cant+1,), None, tanimotoArray, combinationsArray1, combinationsArray2, tanimotoResultArray)
+
+    cl.enqueue_copy(queue, tanimotoResult, tanimotoResultArray).wait()
     
     finGPU = time.time()
     
     tiempoGPU[i] = finGPU-inicioGPU
-    
-    cl.enqueue_copy(queue, tanimotoResult, tanimotoResultArray).wait()
-    
     
     
     cantFgrps = cantFgrps + 100
@@ -206,7 +203,7 @@ for i in range(cambiar):
     fgrpsAux = fgrps[0:cantFgrps]
     
 # Graficar ambas líneas
-plt.plot(tiempoRDKIT, label="Tiempos Rdkit")
+plt.plot(tiempoRDKIT, label="Tiempos RDKit")
 plt.plot(tiempoGPU, label="Tiempos GPU")
 
 # Agregar título y etiquetas de los ejes
