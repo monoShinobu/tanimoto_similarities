@@ -7,7 +7,7 @@ from rdkit.Chem.Fingerprints import FingerprintMols
 from openbabel import pybel
 import os
 import subprocess
-from multiprocessing import Pool
+from multiprocessing import Pool, Manager
 
 TOL_SIM = 1e-9
 #folder KL contains known ligands in PDB format.
@@ -88,61 +88,60 @@ def deconstruction(folderKL):
 	return dictLigand,N_KL,N_FAIL,N_FRAG,N_FRAG_NOT	
 '''
 
-def process_ligand(ligand):
-	ligandName = ligand.split(".")[0]
-	print("Fragment ...", ligandName)
-	inLigand = folderKL + ligand
-	outLigand = folderKL + ligandName + ".smi"
-	subprocess.check_call(["obabel", inLigand, "-O", outLigand])
-	try:
-		fragSet = fragmentLigand(outLigand)
-		N_FRAG += len(fragSet)
-		#print("Fragments: ", fragSet)
-		n = 0
-		listId = []
-		for frag in fragSet:
-			#create fragment as SMI file.
-			fragNameSMI = pathHeaderSMI + ligandName + "-f" + str(n) + ".smi"
-			fOut = open(fragNameSMI, "w")
-			#print("%40s %5s %10s"%(frag, "--> ", ligandName + "-f" + str(n) + ".smi"))
-			fOut.write(frag + "\n")
-			fOut.close()
-			fragNameSDF = pathHeaderSMI + ligandName + "-f" + str(n) + ".sdf"
-			#convert SMI to SDF and validate fragment.
-			subprocess.check_call(["obabel", fragNameSMI, "-O", fragNameSDF, "--gen2d"], stderr=subprocess.STDOUT)
-			check = validFragment(fragNameSDF)
-			if check:
-				#convert SMI to PDB and store in PDB folder.
-				fragNamePDB = pathHeaderPDB + ligandName + "-f" + str(n) + ".pdb"
-				subprocess.check_call(["obabel", fragNameSMI, "-O", fragNamePDB, "--gen3d"], stderr=subprocess.STDOUT)
-				listId.append(n)
-			else:
-				N_FRAG_NOT += 1
-				#remove fragment in SMI and SDF format.
-				os.remove(fragNameSMI)
-				os.remove(fragNameSDF)
-			n +=1
-	except TypeError:
-		N_FAIL += 1
-		print("It's not possible to fragment",ligandName)
-		subprocess.check_call(["mv", inLigand, folderFAIL])
-		subprocess.check_call(["mv", outLigand, folderFAIL])
-	return ligandName, listId
+def process_ligand(ligand, dictLigand, N_FAIL, N_FRAG, N_FRAG_NOT):
+    # convert PDB to SMI format.
+    nameSplit = ligand.split(".")
+    ligandName = nameSplit[0]
+    print("Fragment ... ", ligandName)
+    inLigand = folderKL + ligand
+    outLigand = folderKL + ligandName + ".smi"
+    subprocess.check_call(["obabel", inLigand, "-O", outLigand])
+
+    try:
+        fragSet = fragmentLigand(outLigand)
+        N_FRAG.value += len(fragSet)
+        
+        n = 0
+        listId = []
+        for frag in fragSet:
+            # create fragment as SMI file.
+            fragNameSMI = pathHeaderSMI + ligandName + "-f" + str(n) + ".smi"
+            fOut = open(fragNameSMI, "w")
+            fOut.write(frag + "\n")
+            fOut.close()
+            fragNameSDF = pathHeaderSMI + ligandName + "-f" + str(n) + ".sdf"
+            subprocess.check_call(["obabel", fragNameSMI, "-O", fragNameSDF, "--gen2d"], stderr=subprocess.STDOUT)
+            check = validFragment(fragNameSDF)
+            if check:
+                fragNamePDB = pathHeaderPDB + ligandName + "-f" + str(n) + ".pdb"
+                subprocess.check_call(["obabel", fragNameSMI, "-O", fragNamePDB, "--gen3d"], stderr=subprocess.STDOUT)
+                listId.append(n)
+            else:
+                N_FRAG_NOT.value += 1
+                os.remove(fragNameSMI)
+                os.remove(fragNameSDF)
+            n += 1
+        dictLigand[ligandName] = listId
+
+    except TypeError:
+        N_FAIL.value += 1
+        print("It's not possible to fragment", ligandName)
+        subprocess.check_call(["mv", inLigand, folderFAIL])
+        subprocess.check_call(["mv", outLigand, folderFAIL])
 
 def deconstruction(folderKL):
-    N_FAIL, N_FRAG, N_FRAG_NOT = 0, 0, 0
-    dictLigand = {}
+    manager = Manager()
+    dictLigand = manager.dict()
+    N_FAIL = manager.Value('i', 0)
+    N_FRAG = manager.Value('i', 0)
+    N_FRAG_NOT = manager.Value('i', 0)
     ligandKL = os.listdir(folderKL)
     N_KL = len(ligandKL)
 
-    # Crear un grupo de procesos
     with Pool() as pool:
-        results = pool.map(process_ligand, ligandKL)
+        pool.starmap(process_ligand, [(ligand, dictLigand, N_FAIL, N_FRAG, N_FRAG_NOT) for ligand in ligandKL])
 
-    for ligandName, listId in results:
-        dictLigand[ligandName] = listId
-
-    return dictLigand, N_KL, N_FAIL, N_FRAG, N_FRAG_NOT
+    return dict(dictLigand), N_KL, N_FAIL.value, N_FRAG.value, N_FRAG_NOT.value
 
 def fragmentLigand(ligandSMI):
 	f = open(ligandSMI)
