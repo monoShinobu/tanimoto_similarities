@@ -9,13 +9,9 @@ import math
 
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt 
 from rdkit import Chem
 from rdkit import DataStructs
-from rdkit.ML.Cluster import Butina
-from rdkit.Chem import Draw
 from rdkit.Chem import rdFingerprintGenerator
-from rdkit.Chem.Draw import SimilarityMaps
 from multiprocessing import Pool, Manager
 
 # show full results
@@ -64,6 +60,8 @@ cantFgrps = 10000
 
 fgrpsAux = fgrps[0:100]
 
+manager = Manager()
+
 
 # Defining a function to calculate similarities among the molecules
 def pairwise_similarity(fingerprints_list):
@@ -111,7 +109,7 @@ for i in range(cambiar):
     ####################       Paralelizacion en CPU            ####################
     ################################################################################
     '''
-    '''
+
     inicioCPU = time.time()
     
     
@@ -126,82 +124,8 @@ for i in range(cambiar):
     tiempoCPU[i] = finCPU-inicioCPU
     
     print("hola2")
-    '''
     
 
-
-
-
-    '''
-    ################################################################################
-    ####################       Paralelizacion en GPU            ####################
-    ################################################################################
-    '''
-    inicioGPU = time.time()
-    
-    #GPU high computing
-    import pyopencl as cl
-    #import os
-    #os.environ['PYOPENCL_COMPILER_OUTPUT'] = '1'
-
-    #combinaciones posibles
-
-    #progresion aritmetica
-    cant = int(((nfgrps-1)*nfgrps)/2)
-
-
-
-    # Combinaciones
-    
-    combinations = np.transpose(np.triu_indices(nfgrps, k=1))
-    arreglo1 = (combinations[:, 0]*2048).astype("uint16")
-    arreglo2 = (combinations[:, 1]*2048).astype("uint16")
-    
-    
-    fgrpsGpu = np.zeros((len(fgrps), fgrps[0].GetNumBits()), dtype=np.uint8)
-    for l, fp in enumerate(fgrps):
-        fgrpsGpu[l,:] = np.frombuffer(memoryview(fp.ToBitString().encode()), dtype=np.uint8) - ord('0')
-    
-    
-    #iteracion para cada particula
-    tanimotoResult = np.zeros(cant+1, dtype=np.float32)
-    
-     
-    ctx = cl.create_some_context()
-    queue = cl.CommandQueue(ctx, properties=cl.command_queue_properties.PROFILING_ENABLE)
-    
-    mf = cl.mem_flags
-    
-    tanimotoArray = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=fgrpsGpu)
-    combinationsArray1 = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=arreglo1)
-    combinationsArray2 = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=arreglo2)
-    tanimotoResultArray = cl.Buffer(ctx, mf.WRITE_ONLY | mf.COPY_HOST_PTR, hostbuf=tanimotoResult)
-    
-    f = open('tanimotoSimilarity2.cl', 'r', encoding='utf-8')
-    kernels = ''.join(f.readlines())
-    f.close()
-    
-    prg = cl.Program(ctx, kernels).build()
-    
-    block_size = 256
-    global_size = math.ceil(cant / block_size) * block_size
-    
-    knl = prg.tanimoto_similarity(queue, (global_size,), (block_size,), tanimotoArray, combinationsArray1, combinationsArray2, tanimotoResultArray)
-    
-    cl.enqueue_copy(queue, tanimotoResult, tanimotoResultArray).wait()
-    
-    queue.finish()
-    tanimotoArray.release()
-    combinationsArray1.release()
-    combinationsArray2.release()
-    tanimotoResultArray.release()
-    
-    finGPU = time.time()
-    
-    tiempoGPU[i] = finGPU-inicioGPU
-    
-    
-    print("Hola3")
     
     #configuracion para cad iteracion
     
@@ -211,18 +135,3 @@ for i in range(cambiar):
     
     print(i)
     
-# Graficar ambas líneas
-plt.plot(tiempoRDKIT, label="Tiempos RDKit")
-plt.plot(tiempoGPU, label="Tiempos GPU")
-#plt.plot(tiempoCPU, label="Tiempos CPU")
-
-# Agregar título y etiquetas de los ejes
-plt.title("GPU Vs Rdkit")
-plt.xlabel("Ejecución")
-plt.ylabel("Tiempo")
-
-# Agregar leyenda
-plt.legend()
-
-# Mostrar el gráfico
-plt.show()
