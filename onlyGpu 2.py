@@ -23,7 +23,7 @@ np.set_printoptions(threshold=sys.maxsize)
 
 # Reading the input CSV file.
 
-ligands_df = pd.read_csv("smiles2.0.csv" , index_col=0 )
+ligands_df = pd.read_csv("smiles.csv" , index_col=0 )
 #print(ligands_df.head())
 
 
@@ -105,9 +105,8 @@ f.close()
 prg = cl.Program(ctx, kernels).build()
 
 block_size = 256
-global_size = math.ceil(cant / block_size) * block_size
 
-knl = prg.tanimoto_similarity(queue, (global_size,), (block_size,), tanimotoArray, combinationsArray1, combinationsArray2, tanimotoResultArray)
+knl = prg.tanimoto_similarity(queue, (cant,), (block_size,), tanimotoArray, combinationsArray1, combinationsArray2, tanimotoResultArray)
 
 cl.enqueue_copy(queue, tanimotoResult, tanimotoResultArray).wait()
 

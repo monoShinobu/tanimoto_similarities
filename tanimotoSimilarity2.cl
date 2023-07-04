@@ -12,6 +12,7 @@ __kernel void tanimoto_similarity(__global uchar *tanimotoArray,
   int Nb = 0;
   int Nc = 0;
 
+
   for (i = 0; i < 2048; i++) {
     Na = Na + tanimotoArray[mol1 + i];
     Nb = Nb + tanimotoArray[mol2 + i];
