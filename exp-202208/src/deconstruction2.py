@@ -34,7 +34,7 @@ if not os.path.isdir(folderFL):
 	subprocess.check_call(["mkdir",pathBodySMI])
 	subprocess.check_call(["mkdir",pathBodyPDB])
 
-'''
+
 def deconstruction(folderKL):
 	N_FAIL,N_FRAG,N_FRAG_NOT = 0,0,0
 	dictLigand = {}
@@ -138,11 +138,11 @@ def deconstruction(folderKL):
     ligandKL = os.listdir(folderKL)
     N_KL = len(ligandKL)
 
-    with Pool(processes=2) as pool:
+    with Pool() as pool:
         pool.starmap(process_ligand, [(ligand, dictLigand, N_FAIL, N_FRAG, N_FRAG_NOT) for ligand in ligandKL])
 
     return dict(dictLigand), N_KL, N_FAIL.value, N_FRAG.value, N_FRAG_NOT.value
-
+'''
 def fragmentLigand(ligandSMI):
 	f = open(ligandSMI)
 	line = f.readline()
@@ -185,59 +185,48 @@ def validFragment(fileSDF):
 		valid = False
 	return valid
 
-def process_ligandRead(mol, fragList, fragListName):
-    for idFrag in fragList:
-        fragName = mol + "-f" + str(idFrag)
-        fileSMI = pathHeaderSMI + fragName + ".smi"
-        fragFile = open(fileSMI)
-        line = fragFile.readline()
-        fragFile.close()
-        fragSMI = line.strip()
-        fragMOL = Chem.MolFromSmiles(fragSMI)
-        fragFP = FingerprintMols.FingerprintMol(fragMOL)
-        fragListName.append((fragName, mol, idFrag, fragFP))
-
-def process_similarityCalculation(args):
-    i, n, fragListName, dupliSet = args
-    frag_i = fragListName[i][-1]
-    for j in range(i + 1, n):
-        frag_j = fragListName[j][-1]
-        sim = DataStructs.cDataStructs.TanimotoSimilarity(frag_i, frag_j)
-        print("%s %s %.3f" % (fragListName[i][0], fragListName[j][0], sim))
-        if sim > (1 - TOL_SIM):
-            dupliSet.append(fragListName[j])
-	    
-def process_ligandDelete(fragName, mol, idFrag, dictLigand):
-	fileSMI = pathHeaderSMI + fragName + ".smi"
-	fileSDF = pathHeaderSMI + fragName + ".sdf"
-	filePDB = pathHeaderPDB + fragName + ".pdb"
-	os.remove(fileSMI)
-	os.remove(fileSDF)
-	os.remove(filePDB)
-	dictLigand[mol].remove(idFrag)
-
 def duplicity(dictLigand):
-	manage = Manager()
-	fragListName = manage.list()
-	with Pool(processes=2) as pool:
-		pool.starmap(process_ligandRead, [(mol, fragList, fragListName) for mol, fragList in dictLigand.items()])
-
-	dupliSet = manage.list()
+	fragListName = []
+	for mol,fragList in dictLigand.items():
+		#print(mol,fragList)
+		for idFrag in fragList:
+			fragName = mol + "-f" + str(idFrag)
+			fileSMI = pathHeaderSMI + fragName + ".smi"
+			fragFile = open(fileSMI)
+			line = fragFile.readline()
+			fragFile.close()
+			fragSMI = line.strip()
+			#print(fragSMI)
+			fragMOL = Chem.MolFromSmiles(fragSMI)
+			fragFP = FingerprintMols.FingerprintMol(fragMOL)	
+			fragListName.append((fragName,mol,idFrag,fragFP))
+	#print(fragListName)
+	
+	dupliSet = set()
 	n = len(fragListName)
-
-	with Pool(processes=2) as pool:
-		pool.map(process_similarityCalculation, [(i, n, fragListName, dupliSet) for i in range(n)])
-
-	dupliSet = set(dupliSet)
+	for i in range(n):
+		frag_i = fragListName[i][-1]
+		for j in range(i + 1,n):
+			frag_j = fragListName[j][-1]
+			sim = DataStructs.cDataStructs.TanimotoSimilarity(frag_i, frag_j)
+			#sim = DataStructs.cDataStructs.DiceSimilarity(frag_i, frag_j)
+			print("%s %s %.3f"%(fragListName[i][0],fragListName[j][0],sim))
+			if sim > (1 - TOL_SIM):
+				#if the fragments are similar, add one of them to the duplicity set.
+				#print("Similar fragments ... ",fragListName[i][0],fragListName[j][0])
+				dupliSet.add(fragListName[j])
 
 	print(dictLigand)
-	dictLigand = manage.dict(dictLigand)
-	with Pool(processes=2) as pool:
-		pool.map(process_similarityCalculation, [(fragName, mol, idFrag, dictLigand) for (fragName,mol,idFrag,_) in dupliSet])
-		
-
-	return dictLigand, len(dupliSet)
-
+	for (fragName,mol,idFrag,_) in dupliSet:
+		#print("Deleting ......",fragName)
+		fileSMI = pathHeaderSMI + fragName + ".smi"
+		fileSDF = pathHeaderSMI + fragName + ".sdf"
+		filePDB = pathHeaderPDB + fragName + ".pdb"
+		os.remove(fileSMI)
+		os.remove(fileSDF)
+		os.remove(filePDB)
+		dictLigand[mol].remove(idFrag)
+	return dictLigand,len(dupliSet)
 	
 def cleaner(dictLigand):
 	for mol,fragList in dictLigand.items():
