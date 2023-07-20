@@ -1,5 +1,5 @@
 
-__kernel void tanimoto_similarity(__global uchar *tanimotoArray,
+__kernel void tanimoto_similarity(__global int *tanimotoArray,
                                   __global ushort *combinationsArray1,
                                   __global ushort *combinationsArray2,
                                   __global float *tanimotoResultArray,
@@ -22,7 +22,7 @@ __kernel void tanimoto_similarity(__global uchar *tanimotoArray,
     fin = molSize2;
   }
 
-  for (i = 0; i < fin; i++) {
+  for (i = 0; i < 2048; i++) {
     Na = Na + tanimotoArray[mol1 + i];
     Nb = Nb + tanimotoArray[mol2 + i];
     

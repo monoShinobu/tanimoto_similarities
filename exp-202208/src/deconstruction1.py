@@ -4,7 +4,7 @@ import subprocess
 from rdkit import Chem, DataStructs
 from rdkit.Chem import BRICS
 from rdkit.Chem.Fingerprints import FingerprintMols
-from rdkit.Chem import rdMolDescriptors, AllChem
+from rdkit.Chem import rdMolDescriptors
 from openbabel import pybel
 import numpy as np
 import copy
@@ -200,18 +200,17 @@ def process_ligandRead(mol, fragList, fragListName, lock):
 		fragMOL = Chem.MolFromSmiles(fragSMI)
 		fragFP = FingerprintMols.FingerprintMol(fragMOL)
 		with lock:
-			fragListName.append((fragName, mol, idFrag, fragFP))
+			fragListName.append([fragName, mol, idFrag, fragFP])
 
-def process_similarityCalculation(i, n, fragListName):
-    dupliSetAux = []
+def process_similarityCalculation(i, n, fragListName, dupliSet, lock):
     frag_i = fragListName[i][-1]
     for j in range(i + 1, n):
         frag_j = fragListName[j][-1]
         sim = DataStructs.cDataStructs.TanimotoSimilarity(frag_i, frag_j)
         print("%s %s %.3f" % (fragListName[i][0], fragListName[j][0], sim))
         if sim > (1 - TOL_SIM):
-            dupliSetAux.append(fragListName[j])
-    return dupliSetAux
+            with lock:
+            	dupliSet.append(fragListName[j])
 	    
 def process_ligandDelete(fragName, mol, idFrag, dictLigandShared, lock):
 	fileSMI = pathHeaderSMI + fragName + ".smi"
@@ -223,173 +222,32 @@ def process_ligandDelete(fragName, mol, idFrag, dictLigandShared, lock):
 	with lock:
 		dictLigandShared[mol] = [x for x in dictLigandShared[mol] if x != idFrag]
 
+def key_function(element):
+    fragName, mol, idFrag, _ = element
+    return (fragName, mol, idFrag)
+
 def duplicity(dictLigand):
-	fragListName = []
-
-	#array with all the fingerprints of the molecules
-	fgrpsGpu = []
-	molSizes = []
-	nfgrps = 0
-	for mol,fragList in dictLigand.items():
-		#print(mol,fragList)
-		for idFrag in fragList:
-			fragName = mol + "-f" + str(idFrag)
-			fileSMI = pathHeaderSMI + fragName + ".smi"
-			fragFile = open(fileSMI)
-			line = fragFile.readline()
-			fragFile.close()
-			fragSMI = line.strip()
-			print(fragSMI)
-			fragMOL = Chem.MolFromSmiles(fragSMI)
-			fragFP = FingerprintMols.FingerprintMol(fragMOL)	
-			#fragFP = FingerprintMols.FingerprintMol(fragMOL)
-
-			#fragFP2 = Chem.RDKFingerprint(fragMOL)
-			#V2
-			"""
-			fp_vec = rdMolDescriptors.GetMorganFingerprintAsBitVect(
-				copy.deepcopy(fragMOL),
-				radius=2,
-				nBits=2048,
-			)
-			"""
-			#fp_array = np.frombuffer(fp_vec.ToBitString().encode(), dtype=np.uint8) - ord('0')
-			#fp_array1 = np.frombuffer(fragFP.ToBitString().encode(), dtype=np.uint8) - ord('0')
-			#molSizes.append(len(fp_vec))
-			
-
-			#put fingerprints on the array
-			#fp_string = fragFP.ToBitString()
-			#fp_bytes = fp_string.encode()
-			#fp_memoryview = memoryview(fp_bytes)
-			
-			#V1
-			'''
-			fp_array = np.frombuffer(memoryview(fragFP.ToBitString().encode()), dtype=np.uint8) - ord('0')
-			print("+++++++++++++++++++++++++++++++++++",len(fp_array))
-			molSizes.append(len(fp_array))
-			dif = 2048 - len(fp_array)
-			fp_array = np.append(fp_array, np.zeros(dif, dtype=np.int32))
-			'''
-
-			#V3
-			fp = AllChem.GetMorganFingerprintAsBitVect(fragMOL, 2, nBits=2048)
-
-			# Convertir el BitVect a una cadena de '0' y '1'
-			fp_array = DataStructs.cDataStructs.BitVectToText(fragFP)
-			print("fp_array",len(fp_array))
-			molSizes.append(len(fp_array))
-			dif = 2048 - len(fp_array)
-			fp_array += "0" * dif
-
-			#fp_array = np.array(list(fp_string), dtype=np.int32)
-			#print("+++++++++++++++++++++++++++++++++++",len(fp_array))
-			fgrpsGpu += fp_array
-			nfgrps += 1
-
-			fragListName.append((fragName,mol,idFrag, fragFP))
-	print("fgrpsGpu",fgrpsGpu)
-	fgrpsGpu = np.array(fgrpsGpu, dtype=np.int32)
-	molSizes = np.array(molSizes, dtype=np.int32)
-
-	'''
-	a = 0
-	b = 0
-	c = 0
-
-	if molSizes[0] < molSizes[1]:
-		fin = molSizes[0]
-	else:
-		fin = molSizes[1]
-	print(fin)
-	for p in range(fin):
-		a += fgrpsGpu[p]
-		b += fgrpsGpu[p+2048]
-		if (fgrpsGpu[p] == 1 and fgrpsGpu[p+2048] == 1):
-			c += 1
-	print("hola", a+b-c)
-	print("...............................................................tanimoto",float(c/(a+b-c)))
-	'''
-	print("fragListName",fragListName)
-	print("frgpsGpu",fgrpsGpu)
-	print("nfgrps",len(fgrpsGpu))
-	print("real nfgrps",nfgrps)
-	print("molSizes",molSizes)
-	print("molsizes len", len(molSizes))
-	
-	#jaime's tanimoto similarity
-	#nfgrps = len(fgrpsGpu)
-	#print("cant",cant)
-
-	tanimotoResult, cant, arreglo1 = tanimotoSmilarityGpu(fgrpsGpu, molSizes, nfgrps)
-	
-
-	#print("tanimotoResult",tanimotoResult)
-
-
-
-	dupliSet = set()
-	
-	fgrpsIndex = 0
-	while fgrpsIndex < cant:
-		print("***************************simGPU",tanimotoResult[fgrpsIndex])
-		if tanimotoResult[fgrpsIndex] > (1 - TOL_SIM):
-			molNr = int(arreglo1[fgrpsIndex] / 2048)
-			dupliSet.add(fragListName[molNr])
-		fgrpsIndex += 1
-	
-	n = len(fragListName)
-	for i in range(n):
-		frag_i = fragListName[i][-1]
-		for j in range(i + 1,n):
-			frag_j = fragListName[j][-1]
-			sim = DataStructs.cDataStructs.TanimotoSimilarity(frag_i, frag_j)
-			
-			print("/////////////////////////////////////////////sim", sim)
-			#sim = DataStructs.cDataStructs.DiceSimilarity(frag_i, frag_j)
-			print("%s %s %.3f"%(fragListName[i][0],fragListName[j][0],sim))
-			if sim > (1 - TOL_SIM):
-				#if the fragments are similar, add one of them to the duplicity set.
-				#print("Similar fragments ... ",fragListName[i][0],fragListName[j][0])
-				#dupliSet.add(fragListName[j])
-				u = 0
-	
-	print("dictLigand",dictLigand)
-	print("dupliset",dupliSet)
-
-	#cpu paralelization
-	manage = Manager()
-	lock = manage.Lock()
-
-	dictLigandShared = manage.dict(copy.deepcopy(dictLigand))
-	with Pool(processes=2) as pool:
-		pool.starmap(process_ligandDelete, [(fragName, mol, idFrag, dictLigandShared, lock) for (fragName,mol,idFrag,_) in dupliSet])
-	
-	return dictLigandShared, len(dupliSet)
-	'''
 	manage = Manager()
 	lock = manage.Lock()
 
 	fragListName = manage.list()
-	with Pool(processes=2) as pool:
+	with Pool(processes=3) as pool:
 		pool.starmap(process_ligandRead, [(mol, fragList, fragListName, lock) for mol, fragList in dictLigand.items()])
 
 
 	dupliSet = manage.list()
 	n = len(fragListName)
 
-	with Pool(processes=2) as pool:
-		pool.starmap(process_similarityCalculation, [(i, n, fragListName, dupliSet) for i in range(n)])
+	with Pool(processes=3) as pool:
+		pool.starmap(process_similarityCalculation, [(i, n, fragListName, dupliSet, lock) for i in range(n)])
 
-	dupliSet = set(dupliSet)
-
+	dupliSet = set(key_function(element) for element in dupliSet)
 	
 	dictLigandShared = manage.dict(copy.deepcopy(dictLigand))
-	with Pool(processes=2) as pool:
-		pool.starmap(process_ligandDelete, [(fragName, mol, idFrag, dictLigandShared, lock) for (fragName,mol,idFrag,_) in dupliSet])
+	with Pool(processes=3) as pool:
+		pool.starmap(process_ligandDelete, [(fragName, mol, idFrag, dictLigandShared, lock) for (fragName,mol,idFrag) in dupliSet])
 	
 	return dictLigandShared, len(dupliSet)
-	'''
 
 def process_cleaner(mol,fragList):
 	for idFrag in fragList:
