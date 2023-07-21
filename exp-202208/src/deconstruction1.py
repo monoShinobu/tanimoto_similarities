@@ -1,16 +1,12 @@
 import os
-import time
 import subprocess
 from rdkit import Chem, DataStructs
 from rdkit.Chem import BRICS
 from rdkit.Chem.Fingerprints import FingerprintMols
-from rdkit.Chem import rdMolDescriptors
 from openbabel import pybel
 import numpy as np
 import copy
 from multiprocessing import Pool, Manager
-from rdkit.Chem import rdFingerprintGenerator
-from src.GpuSimilarity import *
 
 
 TOL_SIM = 1e-9
@@ -231,20 +227,20 @@ def duplicity(dictLigand):
 	lock = manage.Lock()
 
 	fragListName = manage.list()
-	with Pool(processes=3) as pool:
+	with Pool(processes=2) as pool:
 		pool.starmap(process_ligandRead, [(mol, fragList, fragListName, lock) for mol, fragList in dictLigand.items()])
 
 
 	dupliSet = manage.list()
 	n = len(fragListName)
 
-	with Pool(processes=3) as pool:
+	with Pool(processes=2) as pool:
 		pool.starmap(process_similarityCalculation, [(i, n, fragListName, dupliSet, lock) for i in range(n)])
 
 	dupliSet = set(key_function(element) for element in dupliSet)
 	
 	dictLigandShared = manage.dict(copy.deepcopy(dictLigand))
-	with Pool(processes=3) as pool:
+	with Pool(processes=2) as pool:
 		pool.starmap(process_ligandDelete, [(fragName, mol, idFrag, dictLigandShared, lock) for (fragName,mol,idFrag) in dupliSet])
 	
 	return dictLigandShared, len(dupliSet)

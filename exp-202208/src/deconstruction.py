@@ -38,7 +38,7 @@ if not os.path.isdir(folderFL):
 	subprocess.check_call(["mkdir",pathBodySMI])
 	subprocess.check_call(["mkdir",pathBodyPDB])
 
-'''
+
 def deconstruction(folderKL):
 	N_FAIL,N_FRAG,N_FRAG_NOT = 0,0,0
 	dictLigand = {}
@@ -146,7 +146,7 @@ def deconstruction(folderKL):
         pool.starmap(process_ligand, [(ligand, dictLigand, N_FAIL, N_FRAG, N_FRAG_NOT) for ligand in ligandKL])
 
     return dict(dictLigand), N_KL, N_FAIL.value, N_FRAG.value, N_FRAG_NOT.value
-
+'''
 def fragmentLigand(ligandSMI):
 	f = open(ligandSMI)
 	line = f.readline()
@@ -276,23 +276,23 @@ def duplicity(dictLigand):
 			fp = AllChem.GetMorganFingerprintAsBitVect(fragMOL, 2, nBits=2048)
 
 			# Convertir el BitVect a una cadena de '0' y '1'
-			fp_array = DataStructs.cDataStructs.BitVectToText(fragFP)
+			fp_array = DataStructs.cDataStructs.BitVectToText(fp)
 			print("fp_array",len(fp_array))
-			molSizes.append(len(fp_array))
-			dif = 2048 - len(fp_array)
-			fp_array += "0" * dif
+
+			fp_array2 = np.frombuffer(memoryview(fragFP.ToBitString().encode()), dtype=np.uint8) - ord('0')
+			molSizes.append(len(fp_array2))
 
 			#fp_array = np.array(list(fp_string), dtype=np.int32)
 			#print("+++++++++++++++++++++++++++++++++++",len(fp_array))
-			fgrpsGpu += fp_array
+			fgrpsGpu += copy.deepcopy(fp_array)
 			nfgrps += 1
 
 			fragListName.append((fragName,mol,idFrag, fragFP))
-	print("fgrpsGpu",fgrpsGpu)
+	print("fgrpsGpu",len(fp_array))
 	fgrpsGpu = np.array(fgrpsGpu, dtype=np.int32)
 	molSizes = np.array(molSizes, dtype=np.int32)
 
-	'''
+	
 	a = 0
 	b = 0
 	c = 0
@@ -309,7 +309,7 @@ def duplicity(dictLigand):
 			c += 1
 	print("hola", a+b-c)
 	print("...............................................................tanimoto",float(c/(a+b-c)))
-	'''
+	
 	print("fragListName",fragListName)
 	print("frgpsGpu",fgrpsGpu)
 	print("nfgrps",len(fgrpsGpu))
@@ -337,7 +337,7 @@ def duplicity(dictLigand):
 			molNr = int(arreglo1[fgrpsIndex] / 2048)
 			dupliSet.add(fragListName[molNr])
 		fgrpsIndex += 1
-	
+	'''
 	n = len(fragListName)
 	for i in range(n):
 		frag_i = fragListName[i][-1]
@@ -353,7 +353,7 @@ def duplicity(dictLigand):
 				#print("Similar fragments ... ",fragListName[i][0],fragListName[j][0])
 				#dupliSet.add(fragListName[j])
 				u = 0
-	
+	'''
 	print("dictLigand",dictLigand)
 	print("dupliset",dupliSet)
 
