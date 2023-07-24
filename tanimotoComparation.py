@@ -25,7 +25,7 @@ np.set_printoptions(threshold=sys.maxsize)
 
 # Reading the input CSV file.
 
-ligands_df = pd.read_csv("smiles2.0.csv" , index_col=0 )
+ligands_df = pd.read_csv("smiles1.1.csv" , index_col=0 )
 #print(ligands_df.head())
 
 
@@ -41,7 +41,7 @@ molecules = []
 
 for _, smiles in ligands_df[[ "SMILES"]].itertuples():
     molecules.append((Chem.MolFromSmiles(smiles)))
-molecules[:10000]
+molecules[:4]
 
 
 # Creating fingerprints for all molecules
@@ -56,12 +56,12 @@ print("Number of fingerprints:", nfgrps)
 
 #fp_arr = np.zeros((1,))
 
-cambiar = 11
+cambiar = 1
 
 tiempoRDKIT = np.zeros(cambiar)
 tiempoGPU = np.zeros(cambiar)
 cantidad = np.zeros(cambiar)
-cantFgrps = 100
+cantFgrps = 4
 
 fgrpsAux = fgrps[0:cantFgrps]
 
@@ -225,7 +225,7 @@ for i in range(cambiar):
     fgrpsAux = fgrps[0:cantFgrps]
     
     print(i)
-    
+""" 
 print(tiempoRDKIT)
 print(tiempoGPU)
 
@@ -257,3 +257,4 @@ plt.legend()
 
 # Mostrar el gráfico
 plt.show()
+"""

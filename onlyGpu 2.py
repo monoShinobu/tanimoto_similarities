@@ -23,7 +23,7 @@ np.set_printoptions(threshold=sys.maxsize)
 
 # Reading the input CSV file.
 
-ligands_df = pd.read_csv("smiles.csv" , index_col=0 )
+ligands_df = pd.read_csv("smiles1.1.csv" , index_col=0 )
 #print(ligands_df.head())
 
 
@@ -48,6 +48,7 @@ molecules[:10000]
 rdkit_gen = rdFingerprintGenerator.GetRDKitFPGenerator(maxPath=7)
 fgrps = [rdkit_gen.GetFingerprint(mol) for mol in molecules]
 
+print("fgrps",fgrps)
 
 # Calculating number of fingerprints
 nfgrps = len(fgrps)
@@ -78,14 +79,23 @@ fgrpsGpu = np.zeros((len(fgrps), fgrps[0].GetNumBits()), dtype=np.uint8)
 for l, fp in enumerate(fgrps):
     fgrpsGpu[l,:] = np.fromstring(fp.ToBitString(), dtype=np.uint8) - ord('0')
 '''
-
+"""
 fgrpsGpu = np.zeros((len(fgrps), fgrps[0].GetNumBits()), dtype=np.uint8)
 for l, fp in enumerate(fgrps):
     fgrpsGpu[l,:] = np.frombuffer(memoryview(fp.ToBitString().encode()), dtype=np.uint8) - ord('0')
+"""
 
+fgrpsGpu = []
+for l, fp in enumerate(fgrps):
+    fp_array = np.frombuffer(memoryview(fp.ToBitString().encode()), dtype=np.uint8) - ord('0')
+    fgrpsGpu.append(fp_array)
+
+fgrpsGpu = np.array(fgrpsGpu)
+
+print(len(fgrpsGpu[0]))
 
 #iteracion para cada particula
-tanimotoResult = np.zeros(cant+1, dtype=np.float32)
+tanimotoResult = np.zeros(cant, dtype=np.float32)
 
  
 ctx = cl.create_some_context()
@@ -105,6 +115,7 @@ f.close()
 prg = cl.Program(ctx, kernels).build()
 
 block_size = 256
+
 
 knl = prg.tanimoto_similarity(queue, (cant,), (block_size,), tanimotoArray, combinationsArray1, combinationsArray2, tanimotoResultArray)
 

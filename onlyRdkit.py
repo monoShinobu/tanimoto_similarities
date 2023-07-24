@@ -22,7 +22,7 @@ np.set_printoptions(threshold=sys.maxsize)
 
 # Reading the input CSV file.
 
-ligands_df = pd.read_csv("smiles2.0.csv" , index_col=0 )
+ligands_df = pd.read_csv("smiles1.1.csv" , index_col=0 )
 #print(ligands_df.head())
 
 # Creating molecules and storing in an array
@@ -36,7 +36,7 @@ molecules = []
 
 for _, smiles in ligands_df[[ "SMILES"]].itertuples():
     molecules.append((Chem.MolFromSmiles(smiles)))
-molecules[:10000]
+molecules[:4]
 
 
 # Creating fingerprints for all molecules
@@ -63,9 +63,9 @@ def pairwise_similarity(fingerprints_list):
     similarities = np.zeros((nfgrps, nfgrps))
 
     for i in range(1, nfgrps):
-            similarity = DataStructs.BulkTanimotoSimilarity(fgrps[i], fgrps[:i])
-            similarities[i, :i] = similarity
-            similarities[:i, i] = similarity
+        similarity = DataStructs.TanimotoSimilarity(fgrps[i], fgrps[i-1])
+        similarities[i, i-1] = similarity
+        similarities[i-1, i] = similarity
             
     return similarities
 

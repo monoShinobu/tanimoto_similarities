@@ -22,7 +22,7 @@ np.set_printoptions(threshold=sys.maxsize)
 
 # Reading the input CSV file.
 
-ligands_df = pd.read_csv("smiles1.0.csv" , index_col=0 )
+ligands_df = pd.read_csv("smiles1.1.csv" , index_col=0 )
 #print(ligands_df.head())
 
 

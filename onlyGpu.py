@@ -24,7 +24,7 @@ np.set_printoptions(threshold=sys.maxsize)
 
 # Reading the input CSV file.
 
-ligands_df = pd.read_csv("smiles2.0.csv" , index_col=0 )
+ligands_df = pd.read_csv("smiles1.1.csv" , index_col=0 )
 #print(ligands_df.head())
 
 
@@ -49,7 +49,7 @@ molecules[:10000]
 rdkit_gen = rdFingerprintGenerator.GetRDKitFPGenerator(maxPath=7)
 fgrps = [rdkit_gen.GetFingerprint(mol) for mol in molecules]
 
-fgrps = fgrps[0:10100]
+fgrps = fgrps[0:4]
 
 # Calculating number of fingerprints
 nfgrps = len(fgrps)
